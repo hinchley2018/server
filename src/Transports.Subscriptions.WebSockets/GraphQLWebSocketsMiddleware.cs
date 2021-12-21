@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
@@ -58,6 +59,8 @@ namespace GraphQL.Server.Transports.WebSockets
                     return;
                 }
 
+                context.MyLog("Start middleware");
+                context.Response.RegisterForDispose(new MyDisposeClass(() => context.MyLog("Dispose connection")));
                 using (_logger.BeginScope($"GraphQL websocket connection: {context.Connection.Id}"))
                 {
                     var connectionFactory = context.RequestServices.GetRequiredService<IWebSocketConnectionFactory<TSchema>>();
@@ -66,6 +69,17 @@ namespace GraphQL.Server.Transports.WebSockets
                     await connection.Connect();
                 }
             }
+        }
+
+        private class MyDisposeClass : IDisposable
+        {
+            private readonly Action _action;
+            public MyDisposeClass(Action action)
+            {
+                _action = action;
+            }
+
+            public void Dispose() => _action.Invoke();
         }
     }
 }
