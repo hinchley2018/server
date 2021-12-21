@@ -19,6 +19,7 @@ namespace GraphQL
             {
                 lock (_weakReferences)
                 {
+                    string stringToLog;
                     for (var i = _weakReferences.Count - 1; i >= 0; i--)
                     {
                         var weakReference = _weakReferences[i];
@@ -26,13 +27,23 @@ namespace GraphQL
                             _weakReferences.RemoveAt(i);
                         else if (object.ReferenceEquals(weak, obj))
                         {
-                            Debug.WriteLine($"{obj.GetType().Name} #{weakReference.Item2}: {value}");
-                            return;
+                            stringToLog = $"{obj.GetType().Name} #{weakReference.Item2}: {value}";
+                            goto LogIt;
                         }
                     }
                     var newId = _counter++;
                     _weakReferences.Add((new WeakReference<T>(obj, false), newId));
-                    Debug.WriteLine($"{obj.GetType().Name} #{newId}: {value}");
+                    stringToLog = $"{obj.GetType().Name} #{newId}: {value}";
+
+                LogIt:
+                    stringToLog = DateTime.UtcNow.ToString("o") + " " + stringToLog;
+                    try
+                    {
+                        using var sw = new System.IO.StreamWriter("testwebserver.txt", true);
+                        sw.WriteLine(stringToLog);
+                        sw.Flush();
+                    }
+                    catch { }
                 }
             }
         }
