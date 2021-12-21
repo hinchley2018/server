@@ -12,7 +12,7 @@ namespace TestClient
     {
         static void Main(string[] args)
         {
-            int startThreads = 1;
+            int startThreads = 100;
             var tasks = new Task[startThreads];
             foreach(var v in Enumerable.Range(0, startThreads))
             {
@@ -27,7 +27,7 @@ namespace TestClient
                             if (subscriptionCancelToken == null || subscriptionCancelToken.Token.IsCancellationRequested)
                             {
                                 Console.WriteLine("Connecting...");
-                                GraphQLClient = new GraphQLHttpClient("http://172.18.10.100:3536/graphql", new NewtonsoftJsonSerializer());
+                                GraphQLClient = new GraphQLHttpClient("http://testwebapp.dev1.acdmail.com/graphql", new NewtonsoftJsonSerializer());
 
                                 subscriptionCancelToken = new CancellationTokenSource();
                                 var subscriptionStream = await GraphQLClient.SubscriptionTestQuery();
