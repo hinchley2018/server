@@ -13,20 +13,27 @@ namespace GraphQL.Server.Transports.WebSockets
             WebSocketTransport transport,
             SubscriptionServer subscriptionServer)
         {
+            this.MyLog("Constructor");
             _transport = transport;
             _server = subscriptionServer;
         }
 
         public async Task Connect()
         {
+            this.MyLog("OnConnect");
             await _server.OnConnect();
+            this.MyLog("OnDisconnect");
             await _server.OnDisconnect();
+            this.MyLog("CloseAsync");
             await _transport.CloseAsync();
+            this.MyLog("Connect finished");
         }
 
         public void Dispose()
         {
+            this.MyLog("Dispose");
             _transport.Dispose();
+            this.MyLog("Dispose finished");
         }
     }
 }

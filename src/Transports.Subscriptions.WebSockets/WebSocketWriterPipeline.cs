@@ -1,3 +1,4 @@
+using System;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -45,18 +46,40 @@ namespace GraphQL.Server.Transports.WebSockets
 
         private async Task WriteMessageAsync(OperationMessage message)
         {
-            if (_socket.CloseStatus.HasValue)
-                return;
-
-            var stream = new WebsocketWriterStream(_socket);
+            WebSocketState? state = null;
+            WebSocketCloseStatus? closeStatus = null;
             try
             {
-                await _documentWriter.WriteAsync(stream, message);
+                state = _socket.State;
+                closeStatus = _socket.CloseStatus;
             }
-            finally
+            catch { }
+            _socket.MyLog($"WriteMessageAsync - state {state} - close status {closeStatus}");
+            try
             {
-                await stream.FlushAsync();
-                stream.Dispose();
+                if (_socket.CloseStatus.HasValue)
+                    return;
+
+                var stream = new WebsocketWriterStream(_socket);
+                try
+                {
+                    await _documentWriter.WriteAsync(stream, message);
+                }
+                finally
+                {
+                    await stream.FlushAsync();
+                    stream.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    state = _socket.State;
+                    closeStatus = _socket.CloseStatus;
+                }
+                catch { }
+                _socket.MyLog($"WriteMessageAsync caught error - state {state} - close status {closeStatus} - {ex}");
             }
         }
     }

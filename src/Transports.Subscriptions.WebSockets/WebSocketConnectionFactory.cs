@@ -30,6 +30,7 @@ namespace GraphQL.Server.Transports.WebSockets
 
         public WebSocketConnection CreateConnection(WebSocket socket, string connectionId)
         {
+            socket.MyLog($"CreateConnection - connectionId {connectionId}");
             _logger.LogDebug("Creating server for connection {connectionId}", connectionId);
 
             var transport = new WebSocketTransport(socket, _documentWriter);

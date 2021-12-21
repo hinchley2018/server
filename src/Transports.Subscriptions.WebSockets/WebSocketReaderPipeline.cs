@@ -42,6 +42,7 @@ namespace GraphQL.Server.Transports.WebSockets
 
         public async Task Complete(WebSocketCloseStatus closeStatus, string statusDescription)
         {
+            _socket.MyLog($"WSRP.Complete - close status {closeStatus} - description {statusDescription}");
             try
             {
                 if (_socket.State != WebSocketState.Closed &&
@@ -97,65 +98,88 @@ namespace GraphQL.Server.Transports.WebSockets
 
         private async Task ReadMessageAsync(ITargetBlock<string> target)
         {
-            while (!_socket.CloseStatus.HasValue)
+            _socket.MyLog("WSRP.ReadMessageAsync");
+            try
             {
-                string message;
-                byte[] buffer = new byte[1024 * 4];
-                var segment = new ArraySegment<byte>(buffer);
-
-                using (var memoryStream = new MemoryStream())
+                while (!_socket.CloseStatus.HasValue)
                 {
-                    try
+                    string message;
+                    byte[] buffer = new byte[1024 * 4];
+                    var segment = new ArraySegment<byte>(buffer);
+
+                    using (var memoryStream = new MemoryStream())
                     {
-                        WebSocketReceiveResult receiveResult;
-
-                        do
+                        try
                         {
-                            receiveResult = await _socket.ReceiveAsync(segment, CancellationToken.None);
+                            WebSocketReceiveResult receiveResult;
 
-                            if (receiveResult.CloseStatus.HasValue)
-                                target.Complete();
+                            do
+                            {
+                                receiveResult = await _socket.ReceiveAsync(segment, CancellationToken.None);
 
-                            if (receiveResult.Count == 0)
-                                continue;
+                                if (receiveResult.CloseStatus.HasValue)
+                                    target.Complete();
 
-                            await memoryStream.WriteAsync(segment.Array, segment.Offset, receiveResult.Count);
-                        } while (!receiveResult.EndOfMessage || memoryStream.Length == 0);
+                                if (receiveResult.Count == 0)
+                                    continue;
 
-                        message = Encoding.UTF8.GetString(memoryStream.ToArray());
-                    }
-                    catch (WebSocketException wx)
-                    {
-                        WebSocketCloseStatus closeStatus;
+                                await memoryStream.WriteAsync(segment.Array, segment.Offset, receiveResult.Count);
+                            } while (!receiveResult.EndOfMessage || memoryStream.Length == 0);
 
-                        switch (wx.WebSocketErrorCode)
-                        {
-                            case WebSocketError.ConnectionClosedPrematurely:
-                            case WebSocketError.HeaderError:
-                            case WebSocketError.UnsupportedProtocol:
-                            case WebSocketError.UnsupportedVersion:
-                            case WebSocketError.NotAWebSocket:
-                                closeStatus = WebSocketCloseStatus.ProtocolError;
-                                break;
-                            case WebSocketError.InvalidMessageType:
-                                closeStatus = WebSocketCloseStatus.InvalidMessageType;
-                                break;
-                            default:
-                                closeStatus = WebSocketCloseStatus.InternalServerError;
-                                break;
+                            message = Encoding.UTF8.GetString(memoryStream.ToArray());
                         }
+                        catch (WebSocketException wx)
+                        {
+                            _socket.MyLog($"WSRP caught WSE: error code {wx.WebSocketErrorCode} - error {wx}");
+                            WebSocketCloseStatus closeStatus;
 
-                        await Complete(closeStatus, $"Closing socket connection due to {wx.WebSocketErrorCode}.");
-                        break;
+                            switch (wx.WebSocketErrorCode)
+                            {
+                                case WebSocketError.ConnectionClosedPrematurely:
+                                case WebSocketError.HeaderError:
+                                case WebSocketError.UnsupportedProtocol:
+                                case WebSocketError.UnsupportedVersion:
+                                case WebSocketError.NotAWebSocket:
+                                    closeStatus = WebSocketCloseStatus.ProtocolError;
+                                    break;
+                                case WebSocketError.InvalidMessageType:
+                                    closeStatus = WebSocketCloseStatus.InvalidMessageType;
+                                    break;
+                                default:
+                                    closeStatus = WebSocketCloseStatus.InternalServerError;
+                                    break;
+                            }
+
+                            await Complete(closeStatus, $"Closing socket connection due to {wx.WebSocketErrorCode}.");
+                            break;
+                        }
+                        catch (Exception x)
+                        {
+                            _socket.MyLog($"WSRP caught unhandled exception: {x}");
+                            target.Fault(x);
+                            continue;
+                        }
                     }
-                    catch (Exception x)
-                    {
-                        target.Fault(x);
-                        continue;
-                    }
+
+                    _socket.MyLog("WSRP decoded message and sending to target block");
+                    await target.SendAsync(message);
                 }
-
-                await target.SendAsync(message);
+            }
+            catch (Exception ex)
+            {
+                _socket.MyLog($"WSRP caught outer unhandled exception: {ex}");
+            }
+            finally
+            {
+                WebSocketCloseStatus? webSocketCloseStatus = null;
+                WebSocketState? webSocketState = null;
+                try
+                {
+                    webSocketState = _socket.State;
+                    webSocketCloseStatus = _socket.CloseStatus;
+                }
+                catch { }
+                _socket.MyLog($"WSRP.ReadMessageAsync finished - state {webSocketState} - close status {webSocketCloseStatus}");
             }
         }
     }

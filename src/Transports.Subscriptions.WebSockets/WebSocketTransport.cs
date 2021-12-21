@@ -33,6 +33,14 @@ namespace GraphQL.Server.Transports.WebSockets
 
         public Task CloseAsync()
         {
+            WebSocketState? socketState = null;
+            try
+            {
+                socketState = _socket.State;
+            }
+            catch { }
+            _socket.MyLog($"WebSocketTransport.CloseAsync - socketState {socketState} - closeStatus {CloseStatus}");
+
             if (_socket.State != WebSocketState.Open)
                 return Task.CompletedTask;
 
@@ -45,13 +53,16 @@ namespace GraphQL.Server.Transports.WebSockets
 
         private Task AbortAsync()
         {
+            _socket.MyLog("WebSocketTransport.AbortAsync");
             _socket.Abort();
             return Task.CompletedTask;
         }
 
         public void Dispose()
         {
+            _socket.MyLog("WebSocketTransport.Dispose");
             _socket.Dispose();
+            _socket.MyLog("WebSocketTransport.Dispose finished");
         }
     }
 }
