@@ -61,14 +61,10 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
                     if (ret.CloseStatus.HasValue)
                     {
                         if (ret.CloseStatus == WebSocketCloseStatus.NormalClosure)
-                        {
-                            //should block while cancelling any pending write operations
-                            _cancellationTokenSource.Cancel();
-                            //perform websocket close packets
-                            await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, _socketCancellationToken).ConfigureAwait(false);
-                            return;
-                        }
+                            // finish writing pending data blocks, then send close request
+                            WriteToWebSocketClose();
                         else
+                            // terminate immediately
                             return;
                     }
                     var slicedBuffer = buffer.Slice(0, ret.Count);
@@ -184,6 +180,11 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
                 _queue.Enqueue(data);
         }
 
+        private void WriteToWebSocketClose()
+        {
+            _queue.Enqueue(new MemoryStream());
+        }
+
         /// <summary>
         /// Executed in an orderly fashion when data is queued via _queue.Enqueue
         /// </summary>
@@ -191,17 +192,25 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
         {
             try
             {
-                var buffer = WebSocket.CreateServerBuffer(4096);
-                bool isEnd = false;
-                do
+                if (data.Length == 0)
                 {
-                    _cancellationToken.ThrowIfCancellationRequested();
-                    var bytesRead = data.Read(buffer);
-                    isEnd = data.Position < data.Length;
-                    var slicedBuffer = buffer.Slice(0, bytesRead);
-                    await _socket.SendAsync(slicedBuffer, WebSocketMessageType.Binary, isEnd, _cancellationToken).ConfigureAwait(false);
+                    await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, _cancellationToken);
+                    _cancellationTokenSource.Cancel();
                 }
-                while (!isEnd);
+                else
+                {
+                    var buffer = WebSocket.CreateServerBuffer(4096);
+                    bool isEnd = false;
+                    do
+                    {
+                        _cancellationToken.ThrowIfCancellationRequested();
+                        var bytesRead = data.Read(buffer);
+                        isEnd = data.Position < data.Length;
+                        var slicedBuffer = buffer.Slice(0, bytesRead);
+                        await _socket.SendAsync(slicedBuffer, WebSocketMessageType.Binary, isEnd, _cancellationToken).ConfigureAwait(false);
+                    }
+                    while (!isEnd);
+                }
             }
             catch
             {
