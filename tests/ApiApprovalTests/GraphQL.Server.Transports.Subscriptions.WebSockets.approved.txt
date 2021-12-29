@@ -2,6 +2,8 @@ namespace GraphQL.Server
 {
     public static class GraphQLBuilderWebSocketsExtensions
     {
+        public static GraphQL.DI.IGraphQLBuilder AddWebSockets(this GraphQL.DI.IGraphQLBuilder builder) { }
+        [System.Obsolete]
         public static GraphQL.Server.IGraphQLBuilder AddWebSockets(this GraphQL.Server.IGraphQLBuilder builder) { }
     }
 }
@@ -21,8 +23,8 @@ namespace GraphQL.Server.Transports.WebSockets
     public class WebSocketConnection : System.IDisposable
     {
         public WebSocketConnection(GraphQL.Server.Transports.WebSockets.WebSocketTransport transport, GraphQL.Server.Transports.Subscriptions.Abstractions.SubscriptionServer subscriptionServer) { }
-        public System.Threading.Tasks.Task Connect() { }
-        public void Dispose() { }
+        public virtual System.Threading.Tasks.Task Connect() { }
+        public virtual void Dispose() { }
     }
     public class WebSocketConnectionFactory<TSchema> : GraphQL.Server.Transports.WebSockets.IWebSocketConnectionFactory<TSchema>
         where TSchema : GraphQL.Types.ISchema

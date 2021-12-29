@@ -18,7 +18,7 @@ namespace GraphQL.Server.Transports.WebSockets
             _server = subscriptionServer;
         }
 
-        public async Task Connect()
+        public virtual async Task Connect()
         {
             this.MyLog("OnConnect");
             await _server.OnConnect();
@@ -29,9 +29,10 @@ namespace GraphQL.Server.Transports.WebSockets
             this.MyLog("Connect finished");
         }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
             this.MyLog("Dispose");
+            _server.Dispose();
             _transport.Dispose();
             this.MyLog("Dispose finished");
         }
