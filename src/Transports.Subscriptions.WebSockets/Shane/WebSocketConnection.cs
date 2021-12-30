@@ -27,8 +27,10 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
         private readonly IDocumentWriter _documentWriter;
         private readonly CancellationToken _cancellationToken;
         private readonly CancellationToken _socketCancellationToken;
-        private bool _disposed;
-        private readonly AsyncQueue<Stream> _queue;
+        private readonly AsyncQueue<Stream> _outputQueue;
+        private readonly AsyncQueue<Stream> _inputQueue;
+        private readonly Dictionary<string, IDisposable> _subscriptions;
+        private string? _closeError = null;
 
         public WebSocketConnection(
             WebSocketConnectionArgs args,
@@ -44,7 +46,7 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
             _socketCancellationToken = args.CancellationToken;
             _cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(_socketCancellationToken);
             _cancellationToken = _cancellationTokenSource.Token;
-            _queue = new AsyncQueue<Stream>(WriteToWebSocketInternalAsync);
+            _outputQueue = new AsyncQueue<Stream>(WriteToWebSocketInternalAsync);
         }
 
         public override Task Connect() => ReadFromWebSocket();
@@ -78,9 +80,31 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
                     }
                 }
             }
-            finally
+            catch (OperationCanceledException)
             {
-                _cancellationTokenSource.Cancel();
+            }
+            catch (Exception ex)
+            {
+                _closeError ??= "Unknown error";
+                _logger.LogError($"Unexpected error in ReadFromWebsocket: {ex}");
+            }
+            _cancellationTokenSource.Cancel();
+            if (_closeError != null)
+                _logger.LogInformation($"Abnormal websocket closure: {_closeError}");
+            try
+            {
+                if (!_socketCancellationToken.IsCancellationRequested)
+                {
+                    //todo: wait for pending messages to finish sending
+                    await _socket.CloseAsync(_closeError == null ? WebSocketCloseStatus.NormalClosure : WebSocketCloseStatus.ProtocolError, _closeError, _socketCancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Unexpected error in ReadFromWebsocket: {ex}");
             }
         }
 
@@ -161,7 +185,8 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
         private Task HandleTerminateAsync(OperationMessage message)
         {
             _logger.LogDebug("Handle terminate");
-            return context.Terminate();
+            WriteToWebSocketClose();
+            return Task.CompletedTask;
         }
 
         //=================================
@@ -177,12 +202,15 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
             await _documentWriter.WriteAsync(data, message, _cancellationToken);
             data.Position = 0;
             if (data.Length > 0)
-                _queue.Enqueue(data);
+                _outputQueue.Enqueue(data);
         }
+
+        private Task WriteToWebSocketKeepAlive()
+            => WriteToWebSocket(new OperationMessage { Type = MessageType.GQL_CONNECTION_KEEP_ALIVE });
 
         private void WriteToWebSocketClose()
         {
-            _queue.Enqueue(new MemoryStream());
+            _outputQueue.Enqueue(new MemoryStream());
         }
 
         /// <summary>
