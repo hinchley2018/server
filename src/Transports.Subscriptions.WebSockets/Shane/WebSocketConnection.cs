@@ -31,6 +31,24 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
         private readonly AsyncQueue<Stream> _inputQueue;
         private readonly Dictionary<string, IDisposable> _subscriptions;
         private string? _closeError = null;
+        private int _statusInt;
+
+        private Status _status
+        {
+            get => (Status)_statusInt;
+            set => _statusInt = (int)value;
+        }
+
+        private Status CompareExchangeStatus(Status value, Status comparand)
+            => (Status)Interlocked.CompareExchange(ref _statusInt, (int)value, (int)comparand);
+
+        private enum Status
+        {
+            Init = 0,
+            Connected = 1,
+            Closing = 2,
+            Closed = 3,
+        }
 
         public WebSocketConnection(
             WebSocketConnectionArgs args,
@@ -38,6 +56,7 @@ namespace GraphQL.Server.Transports.WebSockets.Shane
             IDocumentWriter documentWriter,
             ILogger<WebSocketConnection> logger) : base(null, null)
         {
+            _status = Status.Init;
             _socket = args.WebSocket;
             _connectionId = args.ConnectionId;
             _logger = logger;
