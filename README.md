@@ -1,4 +1,5 @@
 # GraphQL for .NET - Subscription Transport WebSockets
+- Jonathon wants to learn graphql
 
 ![License](https://img.shields.io/github/license/graphql-dotnet/server)
 
